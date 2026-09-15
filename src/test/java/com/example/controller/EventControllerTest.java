@@ -1,5 +1,6 @@
 package com.example.controller;
 
+import com.example.exception.EventNotFoundException;
 import com.example.model.Event;
 import com.example.repository.EventRepo;
 import com.example.service.EventService;
@@ -128,37 +129,34 @@ class EventControllerTest {
     }
 
     @Test
-    void findByEventTypeThrowsWhenMissingBecauseNoExceptionHandlerExists() {
-        when(service.getEventByEventType("MISSING")).thenThrow(new RuntimeException("Event Type not found MISSING"));
+    void findByEventTypeReturns404WhenMissing() throws Exception {
+        when(service.getEventByEventType("MISSING")).thenThrow(new EventNotFoundException("MISSING"));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        mockMvc.perform(get("/events/{eventtype}", "MISSING")))
-                .hasRootCauseInstanceOf(RuntimeException.class)
-                .hasRootCauseMessage("Event Type not found MISSING");
+        mockMvc.perform(get("/events/{eventtype}", "MISSING"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Event not found: MISSING"));
     }
 
     @Test
-    void updateEventByEventTypeThrowsWhenMissingBecauseNoExceptionHandlerExists() {
+    void updateEventByEventTypeReturns404WhenMissing() throws Exception {
         when(service.updateTaskByEventType(eq("MISSING"), any(Event.class)))
-                .thenThrow(new RuntimeException("Event not foundMISSING"));
+                .thenThrow(new EventNotFoundException("MISSING"));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        mockMvc.perform(put("/events/{eventtype}", "MISSING")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(event))))
-                .hasRootCauseInstanceOf(RuntimeException.class)
-                .hasRootCauseMessage("Event not foundMISSING");
+        mockMvc.perform(put("/events/{eventtype}", "MISSING")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(event)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Event not found: MISSING"));
     }
 
     @Test
-    void deleteEventByEventTypeThrowsWhenMissingBecauseNoExceptionHandlerExists() {
-        org.mockito.Mockito.doThrow(new RuntimeException("boom"))
+    void deleteEventByEventTypeReturns404WhenMissing() throws Exception {
+        org.mockito.Mockito.doThrow(new EventNotFoundException("MISSING"))
                 .when(service).deleteEventByEventType("MISSING");
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        mockMvc.perform(delete("/events/{eventtype}", "MISSING")))
-                .hasRootCauseInstanceOf(RuntimeException.class)
-                .hasRootCauseMessage("boom");
+        mockMvc.perform(delete("/events/{eventtype}", "MISSING"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Event not found: MISSING"));
     }
 
     @Test

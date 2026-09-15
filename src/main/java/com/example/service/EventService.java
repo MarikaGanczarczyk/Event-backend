@@ -1,6 +1,7 @@
 package com.example.service;
 
 
+import com.example.exception.EventNotFoundException;
 import com.example.model.Event;
 import com.example.repository.EventRepo;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,14 +22,14 @@ public class EventService {
 
     public Event getEventByEventType(String eventType){
         return repo.findByEventType(eventType)
-                .orElseThrow(()-> new RuntimeException("Event Type not found " + eventType));
+                .orElseThrow(()-> new EventNotFoundException(eventType));
     }
 
     public Event addEvent(Event event){return repo.save(event);}
 
     public Event updateTaskByEventType(String eventType, Event updatedEvent) {
 
-        Event existingEvent = repo.findByEventType(eventType).orElseThrow(()-> new RuntimeException("Event not found" + eventType));
+        Event existingEvent = repo.findByEventType(eventType).orElseThrow(()-> new EventNotFoundException(eventType));
 //        existingEvent.setEventType(updatedEvent.getEventType());
         existingEvent.setEventDescription(updatedEvent.getEventDescription());
         existingEvent.setEventOwner(updatedEvent.getEventOwner());
@@ -40,5 +41,10 @@ public class EventService {
 
     }
 
-    public void deleteEventByEventType(String eventType){repo.deleteById(eventType);};
+    public void deleteEventByEventType(String eventType){
+        if (!repo.existsById(eventType)) {
+            throw new EventNotFoundException(eventType);
+        }
+        repo.deleteById(eventType);
+    }
 }

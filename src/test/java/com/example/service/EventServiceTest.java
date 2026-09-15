@@ -1,5 +1,6 @@
 package com.example.service;
 
+import com.example.exception.EventNotFoundException;
 import com.example.model.Event;
 import com.example.repository.EventRepo;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +9,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.EmptyResultDataAccessException;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +16,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -68,7 +67,7 @@ class EventServiceTest {
         when(repo.findByEventType("NOPE")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getEventByEventType("NOPE"))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(EventNotFoundException.class)
                 .hasMessageContaining("NOPE");
     }
 
@@ -113,24 +112,28 @@ class EventServiceTest {
         when(repo.findByEventType("NOPE")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateTaskByEventType("NOPE", new Event()))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(EventNotFoundException.class)
                 .hasMessageContaining("NOPE");
         verify(repo, never()).save(any());
     }
 
     @Test
     void deleteEventByEventTypeDelegatesToRepo() {
+        when(repo.existsById("LOGIN")).thenReturn(true);
+
         service.deleteEventByEventType("LOGIN");
 
         verify(repo).deleteById("LOGIN");
     }
 
     @Test
-    void deleteEventByEventTypePropagatesRepoExceptionWhenMissing() {
-        doThrow(new EmptyResultDataAccessException(1)).when(repo).deleteById("NOPE");
+    void deleteEventByEventTypeThrowsWhenMissing() {
+        when(repo.existsById("NOPE")).thenReturn(false);
 
         assertThatThrownBy(() -> service.deleteEventByEventType("NOPE"))
-                .isInstanceOf(EmptyResultDataAccessException.class);
+                .isInstanceOf(EventNotFoundException.class)
+                .hasMessageContaining("NOPE");
+        verify(repo, never()).deleteById(any());
     }
 
     @Test
