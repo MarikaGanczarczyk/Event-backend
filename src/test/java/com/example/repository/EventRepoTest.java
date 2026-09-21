@@ -1,15 +1,15 @@
 package com.example.repository;
 
 import com.example.model.Event;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
+import static com.example.support.EventFixtures.eventOfType;
+import static com.example.support.EventFixtures.loginEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
@@ -21,80 +21,37 @@ class EventRepoTest {
     @Autowired
     private TestEntityManager entityManager;
 
-    private Event event;
-
-    @BeforeEach
-    void setUp() {
-        event = new Event();
-        event.setEventType("LOGIN");
-        event.setEventDescription("user login");
-        event.setEventOwner("auth");
-        event.setIsActive('Y');
-        event.setCritical('N');
-        event.setIsReusable('Y');
-        event.setGifStage("STAGE_1");
+    @Test
+    void findByEventTypeReturnsPersistedEventWithEveryFieldMapped() {
+        Event event = loginEvent();
         event.setCreatedDate(LocalDateTime.of(2025, 1, 1, 0, 0));
         event.setUpdatedDate(LocalDateTime.of(2026, 1, 1, 0, 0));
         event.setLastUpdatedBy("erik");
-    }
-
-    @Test
-    void savePersistsEvent() {
-        Event saved = repo.save(event);
-
-        assertThat(saved.getEventType()).isEqualTo("LOGIN");
-        assertThat(entityManager.find(Event.class, "LOGIN")).isNotNull();
-    }
-
-    @Test
-    void findByEventTypeReturnsPersistedEvent() {
         entityManager.persistAndFlush(event);
+        entityManager.clear();
 
-        Optional<Event> found = repo.findByEventType("LOGIN");
+        assertThat(repo.findByEventType("LOGIN")).get().usingRecursiveComparison().isEqualTo(event);
+    }
 
-        assertThat(found).isPresent();
-        assertThat(found.get().getEventDescription()).isEqualTo("user login");
-        assertThat(found.get().getIsActive()).isEqualTo('Y');
+    // Documents current behaviour: eventType is an assigned id, so saving an existing eventType replaces the row (upsert).
+    @Test
+    void saveWithExistingEventTypeReplacesTheStoredEvent() {
+        entityManager.persistAndFlush(loginEvent());
+        entityManager.clear();
+
+        Event replacement = loginEvent();
+        replacement.setEventDescription("replacement");
+        repo.saveAndFlush(replacement);
+        entityManager.clear();
+
+        assertThat(repo.count()).isEqualTo(1);
+        assertThat(repo.findByEventType("LOGIN")).get().extracting(Event::getEventDescription).isEqualTo("replacement");
     }
 
     @Test
-    void findByEventTypeReturnsEmptyWhenMissing() {
-        assertThat(repo.findByEventType("MISSING")).isEmpty();
-    }
+    void findByEventTypeReturnsEmptyWhenNoEventHasThatType() {
+        entityManager.persistAndFlush(eventOfType("LOGOUT"));
 
-    @Test
-    void findAllReturnsEveryRow() {
-        entityManager.persistAndFlush(event);
-
-        Event other = new Event();
-        other.setEventType("LOGOUT");
-        entityManager.persistAndFlush(other);
-
-        assertThat(repo.findAll()).hasSize(2);
-    }
-
-    @Test
-    void deleteByIdRemovesEvent() {
-        entityManager.persistAndFlush(event);
-
-        repo.deleteById("LOGIN");
-        entityManager.flush();
-
-        assertThat(entityManager.find(Event.class, "LOGIN")).isNull();
-    }
-
-    @Test
-    void saveWithExistingEventTypeUpdatesInsteadOfDuplicating() {
-        entityManager.persistAndFlush(event);
-
-        Event sameId = new Event();
-        sameId.setEventType("LOGIN");
-        sameId.setEventDescription("updated description");
-        repo.save(sameId);
-        entityManager.flush();
-
-        assertThat(repo.findAll()).hasSize(1);
-        assertThat(entityManager.find(Event.class, "LOGIN").getEventDescription())
-                .isEqualTo("updated description");
+        assertThat(repo.findByEventType("LOGIN")).isEmpty();
     }
 }

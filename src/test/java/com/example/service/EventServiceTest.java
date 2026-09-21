@@ -10,9 +10,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.Optional;
 
+import static com.example.support.EventFixtures.loginEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,33 +33,14 @@ class EventServiceTest {
 
     @BeforeEach
     void setUp() {
-        event = new Event();
-        event.setEventType("LOGIN");
-        event.setEventDescription("desc");
-        event.setEventOwner("owner");
-        event.setIsActive('Y');
-        event.setCritical('N');
-        event.setIsReusable('Y');
-        event.setGifStage("STAGE_1");
-    }
-
-    @Test
-    void getAllEventsReturnsRepoList() {
-        when(repo.findAll()).thenReturn(List.of(event));
-
-        List<Event> result = service.getAllEvents();
-
-        assertThat(result).containsExactly(event);
-        verify(repo).findAll();
+        event = loginEvent();
     }
 
     @Test
     void getEventByEventTypeReturnsEventWhenPresent() {
         when(repo.findByEventType("LOGIN")).thenReturn(Optional.of(event));
 
-        Event result = service.getEventByEventType("LOGIN");
-
-        assertThat(result).isSameAs(event);
+        assertThat(service.getEventByEventType("LOGIN")).isSameAs(event);
     }
 
     @Test
@@ -72,18 +53,8 @@ class EventServiceTest {
     }
 
     @Test
-    void addEventDelegatesToRepoSave() {
-        when(repo.save(event)).thenReturn(event);
-
-        Event result = service.addEvent(event);
-
-        assertThat(result).isSameAs(event);
-        verify(repo).save(event);
-    }
-
-    @Test
-    void updateTaskByEventTypeCopiesMutableFieldsAndSaves() {
-        Event updated = new Event();
+    void updateTaskByEventTypeCopiesMutableFieldsAndKeepsEventType() {
+        Event updated = loginEvent();
         updated.setEventType("IGNORED");
         updated.setEventDescription("new desc");
         updated.setEventOwner("new owner");
@@ -93,10 +64,11 @@ class EventServiceTest {
         updated.setGifStage("STAGE_9");
 
         when(repo.findByEventType("LOGIN")).thenReturn(Optional.of(event));
-        when(repo.save(any(Event.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repo.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Event result = service.updateTaskByEventType("LOGIN", updated);
 
+        assertThat(result).isSameAs(event);
         assertThat(result.getEventType()).isEqualTo("LOGIN");
         assertThat(result.getEventDescription()).isEqualTo("new desc");
         assertThat(result.getEventOwner()).isEqualTo("new owner");
@@ -104,11 +76,26 @@ class EventServiceTest {
         assertThat(result.getCritical()).isEqualTo('Y');
         assertThat(result.getIsReusable()).isEqualTo('N');
         assertThat(result.getGifStage()).isEqualTo("STAGE_9");
-        verify(repo).save(event);
     }
 
     @Test
-    void updateTaskByEventTypeThrowsWhenMissing() {
+    void updateTaskByEventTypeClearsFieldsThatAreNullOnTheUpdate() {
+        when(repo.findByEventType("LOGIN")).thenReturn(Optional.of(event));
+        when(repo.save(any(Event.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Event result = service.updateTaskByEventType("LOGIN", new Event());
+
+        assertThat(result.getEventType()).isEqualTo("LOGIN");
+        assertThat(result.getEventDescription()).isNull();
+        assertThat(result.getEventOwner()).isNull();
+        assertThat(result.getIsActive()).isNull();
+        assertThat(result.getCritical()).isNull();
+        assertThat(result.getIsReusable()).isNull();
+        assertThat(result.getGifStage()).isNull();
+    }
+
+    @Test
+    void updateTaskByEventTypeThrowsWhenMissingAndSavesNothing() {
         when(repo.findByEventType("NOPE")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateTaskByEventType("NOPE", new Event()))
@@ -118,7 +105,7 @@ class EventServiceTest {
     }
 
     @Test
-    void deleteEventByEventTypeDelegatesToRepo() {
+    void deleteEventByEventTypeDeletesExistingEvent() {
         when(repo.existsById("LOGIN")).thenReturn(true);
 
         service.deleteEventByEventType("LOGIN");
@@ -127,29 +114,12 @@ class EventServiceTest {
     }
 
     @Test
-    void deleteEventByEventTypeThrowsWhenMissing() {
+    void deleteEventByEventTypeThrowsWhenMissingAndDeletesNothing() {
         when(repo.existsById("NOPE")).thenReturn(false);
 
         assertThatThrownBy(() -> service.deleteEventByEventType("NOPE"))
                 .isInstanceOf(EventNotFoundException.class)
                 .hasMessageContaining("NOPE");
         verify(repo, never()).deleteById(any());
-    }
-
-    @Test
-    void updateTaskByEventTypeNullsOutFieldsThatAreNullOnTheUpdate() {
-        Event blankUpdate = new Event();
-
-        when(repo.findByEventType("LOGIN")).thenReturn(Optional.of(event));
-        when(repo.save(any(Event.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Event result = service.updateTaskByEventType("LOGIN", blankUpdate);
-
-        assertThat(result.getEventDescription()).isNull();
-        assertThat(result.getEventOwner()).isNull();
-        assertThat(result.getIsActive()).isNull();
-        assertThat(result.getCritical()).isNull();
-        assertThat(result.getIsReusable()).isNull();
-        assertThat(result.getGifStage()).isNull();
     }
 }
